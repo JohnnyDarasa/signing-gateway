@@ -88,6 +88,11 @@ impl SigningService for SigningGatewayService {
             .and_then(|v| v.to_str().ok())
             .and_then(|v| v.strip_prefix("Bearer "))
             .map(|s| s.to_owned());
+        let xff = request
+            .metadata()
+            .get("x-forwarded-for")
+            .and_then(|v| v.to_str().ok())
+            .map(|s| s.to_owned());
 
         let req = request.into_inner();
 
@@ -103,23 +108,24 @@ impl SigningService for SigningGatewayService {
 
             // Enforce per-caller IP allowlist
             if let Some(peer_addr) = peer {
+                let client_ip = self.state.resolve_client_ip(peer_addr.ip(), xff.as_deref());
+
                 let auth = self.state.auth.read().unwrap();
                 if let Some(patterns) = auth.allowed_ips.get(&caller_id_from_token) {
-                    let ip = peer_addr.ip();
                     let allowed = patterns.iter().any(|p| {
                         if let Ok(net) = p.parse::<IpNet>() {
-                            net.contains(&ip)
+                            net.contains(&client_ip)
                         } else if let Ok(exact) = p.parse::<std::net::IpAddr>() {
-                            exact == ip
+                            exact == client_ip
                         } else {
                             false
                         }
                     });
                     if !allowed {
-                        warn!(caller_id = %caller_id_from_token, ip = %ip, "IP not allowed for caller");
+                        warn!(caller_id = %caller_id_from_token, ip = %client_ip, "IP not allowed for caller");
                         return Err(Status::permission_denied(format!(
                             "Source IP '{}' is not permitted for caller '{}'",
-                            ip, caller_id_from_token
+                            client_ip, caller_id_from_token
                         )));
                     }
                 }

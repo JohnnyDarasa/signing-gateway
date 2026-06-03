@@ -136,6 +136,11 @@ pub struct AuthConfig {
     /// If a caller has no entry here, any source IP is accepted.
     #[serde(default)]
     pub allowed_ips: HashMap<String, Vec<String>>,
+    /// CIDRs / IPs of trusted reverse proxies (AWS ALB, nginx, etc.).
+    /// When the direct TCP peer matches one of these, the real client IP is
+    /// read from X-Forwarded-For. Falls back to raw peer IP if header absent.
+    #[serde(default)]
+    pub trusted_proxies: Vec<String>,
 }
 
 // ─── Observability ────────────────────────────────────────────────────────────

@@ -139,7 +139,7 @@ fn check_key_allowed(state: &AppState, caller_id: &str, key_id: &str) -> bool {
 /// Returns true if the source IP is permitted for this caller.
 /// Entries may be exact IPs ("10.0.1.5") or CIDR ranges ("10.0.0.0/8").
 /// Callers with no entry in `allowed_ips` may connect from any IP.
-fn check_ip_allowed(state: &AppState, caller_id: &str, peer: &SocketAddr) -> bool {
+fn check_ip_allowed(state: &AppState, caller_id: &str, ip: std::net::IpAddr) -> bool {
     let auth = state.auth.read().unwrap();
     if auth.allow_all {
         return true;
@@ -147,9 +147,7 @@ fn check_ip_allowed(state: &AppState, caller_id: &str, peer: &SocketAddr) -> boo
     let Some(patterns) = auth.allowed_ips.get(caller_id) else {
         return true; // no restriction configured
     };
-    let ip = peer.ip();
     for pattern in patterns {
-        // Try CIDR first, then exact IP parse
         if let Ok(net) = pattern.parse::<IpNet>() {
             if net.contains(&ip) {
                 return true;
@@ -225,12 +223,17 @@ pub async fn handle_sign(
             .into_response();
     }
 
-    if !check_ip_allowed(&state, &req.caller_id, &peer) {
-        warn!(caller_id = %req.caller_id, ip = %peer.ip(), "IP not allowed for caller");
+    let xff = headers
+        .get("x-forwarded-for")
+        .and_then(|v| v.to_str().ok());
+    let client_ip = state.resolve_client_ip(peer.ip(), xff);
+
+    if !check_ip_allowed(&state, &req.caller_id, client_ip) {
+        warn!(caller_id = %req.caller_id, ip = %client_ip, "IP not allowed for caller");
         return (
             StatusCode::FORBIDDEN,
             Json(ErrorResponse {
-                error: format!("Source IP '{}' is not permitted for caller '{}'", peer.ip(), req.caller_id),
+                error: format!("Source IP '{}' is not permitted for caller '{}'", client_ip, req.caller_id),
                 code: "IP_NOT_ALLOWED".into(),
             }),
         )

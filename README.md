@@ -239,7 +239,27 @@ Restrict each caller to specific source IPs or CIDR ranges:
 - Accepts exact IPs (`"192.168.10.5"`) or CIDR ranges (`"10.0.1.0/24"`). IPv4 and IPv6 are both supported.
 - Callers with no entry here may connect from **any** IP.
 - Requests from a disallowed IP are rejected with `403 Forbidden` (HTTP) or `PERMISSION_DENIED` (gRPC), **after** the bearer token is validated.
-- The IP check uses the direct TCP peer address. If the gateway sits behind a reverse proxy, configure the proxy to forward the real client IP and adjust accordingly.
+- The IP check uses the direct TCP peer address by default. If the gateway sits behind a load balancer or reverse proxy, see **Trusted Proxies** below.
+
+### Trusted proxies (ALB / nginx)
+
+When the gateway runs behind a load balancer, all requests appear to come from the LB's IP. Configure `trusted_proxies` in `config.toml` so the gateway reads the real client IP from `X-Forwarded-For` instead:
+
+```toml
+# config.toml
+trusted_proxies = ["10.0.0.0/16"]   # your ALB / nginx subnet
+```
+
+Resolution logic:
+
+```
+peer IP in trusted_proxies?
+    YES + X-Forwarded-For present  →  use leftmost IP in X-Forwarded-For
+    YES + X-Forwarded-For absent   →  fall back to raw peer IP
+    NO                             →  use raw peer IP
+```
+
+AWS ALB adds `X-Forwarded-For` automatically — no ALB configuration needed. Just make sure the ALB header mode is not set to `remove`.
 
 ---
 

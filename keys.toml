@@ -31,6 +31,10 @@ enabled     = true
 # IRSA (IAM Roles for Service Accounts on EKS) instead.
 [auth]
 allow_all = false    # true only for local dev
+# CIDRs / IPs of trusted reverse proxies (AWS ALB, nginx, etc.).
+# When the direct TCP peer matches one of these, the real client IP is read
+# from X-Forwarded-For instead. Falls back to the raw peer IP if header absent.
+trusted_proxies = ["127.0.0.1"]
 
 [auth.tokens]
 "tok-service-a-xxxxxxxx" = "service-a"

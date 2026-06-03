@@ -42,6 +42,45 @@ pub struct AppState {
     pub start_time: std::time::Instant,
 }
 
+impl AppState {
+    /// Resolve the real client IP.
+    ///
+    /// If `peer` matches a `trusted_proxies` entry, the leftmost IP in
+    /// `X-Forwarded-For` is used as the real client IP.
+    /// Falls back to `peer` when the header is absent or unparseable.
+    pub fn resolve_client_ip(
+        &self,
+        peer: std::net::IpAddr,
+        x_forwarded_for: Option<&str>,
+    ) -> std::net::IpAddr {
+        use ipnet::IpNet;
+
+        let is_trusted = self.auth.read().unwrap().trusted_proxies.iter().any(|p| {
+            if let Ok(net) = p.parse::<IpNet>() {
+                net.contains(&peer)
+            } else if let Ok(exact) = p.parse::<std::net::IpAddr>() {
+                exact == peer
+            } else {
+                false
+            }
+        });
+
+        if is_trusted {
+            if let Some(xff) = x_forwarded_for {
+                // X-Forwarded-For: client, proxy1, proxy2 — leftmost is the real client
+                if let Some(first) = xff.split(',').next() {
+                    if let Ok(ip) = first.trim().parse::<std::net::IpAddr>() {
+                        return ip;
+                    }
+                }
+            }
+        }
+
+        // Not a trusted proxy, or XFF missing/unparseable — use raw peer IP
+        peer
+    }
+}
+
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 #[tokio::main]
@@ -280,10 +319,11 @@ fn default_config() -> GatewayConfig {
             },
         ],
         auth: AuthConfig {
-            tokens:       HashMap::new(),
-            allow_all:    true, // ⚠ dev only
-            allowed_keys: HashMap::new(),
-            allowed_ips:  HashMap::new(),
+            tokens:          HashMap::new(),
+            allow_all:       true, // ⚠ dev only
+            allowed_keys:    HashMap::new(),
+            allowed_ips:     HashMap::new(),
+            trusted_proxies: vec![],
         },
         observability: ObservabilityConfig {
             log_format:   LogFormat::Pretty,
