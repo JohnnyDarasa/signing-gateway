@@ -112,11 +112,12 @@ impl IntoResponse for HsmError {
 // ─── Auth helper ──────────────────────────────────────────────────────────────
 
 fn check_caller(state: &AppState, caller_id: &str, token: Option<&str>) -> bool {
-    if state.config.auth.allow_all {
+    let auth = state.auth.read().unwrap();
+    if auth.allow_all {
         return true;
     }
     match token {
-        Some(t) => state.config.auth.tokens.get(t).map(|id| id == caller_id).unwrap_or(false),
+        Some(t) => auth.tokens.get(t).map(|id| id == caller_id).unwrap_or(false),
         None => false,
     }
 }

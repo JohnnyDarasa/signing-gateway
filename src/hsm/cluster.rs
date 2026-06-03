@@ -472,4 +472,10 @@ impl HsmBackend for HsmClusterBackend {
     async fn list_keys(&self) -> HsmResult<Vec<KeyInfo>> {
         Ok(self.keys.values().map(|e| e.info.clone()).collect())
     }
+
+    async fn reload_keys(&self, _key_configs: &[crate::config::KeyConfig]) -> HsmResult<()> {
+        // HSM cluster keys live on the hardware — no in-memory reload needed.
+        // Key availability is controlled via CKA_LABEL on the HSM token.
+        Ok(())
+    }
 }

@@ -79,14 +79,15 @@ impl SigningService for SigningGatewayService {
         request: Request<SignRequest>,
     ) -> Result<Response<SignResponse>, Status> {
         // Auth: check bearer token from metadata
-        if !self.state.config.auth.allow_all {
+        let allow_all = self.state.auth.read().unwrap().allow_all;
+        if !allow_all {
             let token = request
                 .metadata()
                 .get("authorization")
                 .and_then(|v| v.to_str().ok())
                 .and_then(|v| v.strip_prefix("Bearer "));
 
-            let caller_ok = token.and_then(|t| self.state.config.auth.tokens.get(t)).is_some();
+            let caller_ok = token.and_then(|t| self.state.auth.read().unwrap().tokens.get(t).cloned()).is_some();
             if !caller_ok {
                 return Err(Status::unauthenticated("Invalid or missing Bearer token"));
             }

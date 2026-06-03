@@ -5,8 +5,8 @@ use super::{compute_digest, HsmBackend, HsmError, HsmResult, KeyInfo, PublicKey,
 use crate::config::{Algorithm, KeyConfig, SoftwareHsmConfig};
 use async_trait::async_trait;
 use std::collections::HashMap;
-use std::sync::Arc;
-use tracing::{debug, warn};
+use std::sync::{Arc, RwLock};
+use tracing::{debug, info, warn};
 use zeroize::Zeroizing;
 
 // ─── Stored key ───────────────────────────────────────────────────────────────
@@ -21,11 +21,17 @@ struct StoredKey {
 // ─── Backend struct ───────────────────────────────────────────────────────────
 
 pub struct SoftwareHsm {
-    keys: HashMap<String, StoredKey>,
+    keys: RwLock<HashMap<String, StoredKey>>,
+    cfg:  SoftwareHsmConfig,
 }
 
 impl SoftwareHsm {
     pub fn new(cfg: &SoftwareHsmConfig, key_configs: &[KeyConfig]) -> anyhow::Result<Self> {
+        let keys = Self::load_keys(cfg, key_configs)?;
+        Ok(Self { keys: RwLock::new(keys), cfg: cfg.clone() })
+    }
+
+    fn load_keys(cfg: &SoftwareHsmConfig, key_configs: &[KeyConfig]) -> anyhow::Result<HashMap<String, StoredKey>> {
         let mut keys = HashMap::new();
 
         for kc in key_configs {
@@ -72,7 +78,7 @@ impl SoftwareHsm {
             debug!(key_id = %kc.id, "Loaded software key");
         }
 
-        Ok(Self { keys })
+        Ok(keys)
     }
 }
 
@@ -91,7 +97,8 @@ impl HsmBackend for SoftwareHsm {
         payload: &[u8],
         prehashed: bool,
     ) -> HsmResult<Signature> {
-        let sk = self.keys.get(key_id).ok_or_else(|| HsmError::KeyNotFound(key_id.to_string()))?;
+        let sk = self.keys.read().unwrap()
+            .get(key_id).ok_or_else(|| HsmError::KeyNotFound(key_id.to_string()))?.clone();
 
         if !sk.info.enabled {
             return Err(HsmError::KeyDisabled(key_id.to_string()));
@@ -127,13 +134,15 @@ impl HsmBackend for SoftwareHsm {
         signature: &[u8],
         prehashed: bool,
     ) -> HsmResult<bool> {
-        let sk = self.keys.get(key_id).ok_or_else(|| HsmError::KeyNotFound(key_id.to_string()))?;
+        let sk = self.keys.read().unwrap()
+            .get(key_id).ok_or_else(|| HsmError::KeyNotFound(key_id.to_string()))?.clone();
         let pub_key = derive_public_key_pem(&sk.private_pem, algorithm)?;
         verify_with_public_key(pub_key.as_bytes(), algorithm, payload, signature, prehashed)
     }
 
     async fn public_key(&self, key_id: &str) -> HsmResult<PublicKey> {
-        let sk = self.keys.get(key_id).ok_or_else(|| HsmError::KeyNotFound(key_id.to_string()))?;
+        let sk = self.keys.read().unwrap()
+            .get(key_id).ok_or_else(|| HsmError::KeyNotFound(key_id.to_string()))?.clone();
         let pem = derive_public_key_pem(&sk.private_pem, sk.info.algorithm)?;
         Ok(PublicKey {
             key_id: key_id.to_string(),
@@ -144,7 +153,15 @@ impl HsmBackend for SoftwareHsm {
     }
 
     async fn list_keys(&self) -> HsmResult<Vec<KeyInfo>> {
-        Ok(self.keys.values().map(|sk| sk.info.clone()).collect())
+        Ok(self.keys.read().unwrap().values().map(|sk| sk.info.clone()).collect())
+    }
+
+    async fn reload_keys(&self, key_configs: &[KeyConfig]) -> HsmResult<()> {
+        let new_keys = Self::load_keys(&self.cfg, key_configs)
+            .map_err(|e| HsmError::Config(e.to_string()))?;
+        *self.keys.write().unwrap() = new_keys;
+        info!(count = key_configs.len(), "Keys hot-reloaded from keys.toml");
+        Ok(())
     }
 }
 

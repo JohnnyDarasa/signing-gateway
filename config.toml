@@ -56,44 +56,8 @@ key_dir = "/tmp/signing-gateway-keys"   # chmod 700, owned by service user
 # login_mode   = "user"    # "user" for signing | "so" for key management
 
 
-# ─── Keys ────────────────────────────────────────────────────────────────────
-# backend_ref:
-#   software    → filename stem under key_dir  (e.g. "svc-ec" → svc-ec.pem)
-#   hsm_cluster → CKA_LABEL of the key on the HSM token
-
-[[keys]]
-id          = "svc-signing-ec"
-description = "Primary EC P-256 service signing key"
-backend_ref = "svc-signing-ec"
-algorithm   = "ES256"
-enabled     = true
-
-[[keys]]
-id          = "svc-signing-rsa"
-description = "RSA-2048 signing key (legacy consumers)"
-backend_ref = "svc-signing-rsa"
-algorithm   = "RS256"
-enabled     = true
-
-[[keys]]
-id          = "jwt-hmac"
-description = "HMAC-SHA256 for internal JWT tokens"
-backend_ref = "jwt-hmac"
-algorithm   = "HS256"
-enabled     = true
-
-
-# ─── Auth ────────────────────────────────────────────────────────────────────
-# Static bearer tokens → caller_id.
-# Production recommendation: use mTLS (each service has a client cert) or
-# IRSA (IAM Roles for Service Accounts on EKS) instead.
-[auth]
-allow_all = true    # true only for local dev
-
-[auth.tokens]
-"tok-service-a-xxxxxxxx" = "service-a"
-"tok-service-b-xxxxxxxx" = "service-b"
-"tok-service-c-xxxxxxxx" = "service-c"
+# ─── Keys & Auth ─────────────────────────────────────────────────────────────
+# Defined in keys.toml
 
 
 # ─── Observability ───────────────────────────────────────────────────────────

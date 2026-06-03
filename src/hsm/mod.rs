@@ -85,6 +85,7 @@ pub trait HsmBackend: Send + Sync {
     async fn public_key(&self, key_id: &str) -> HsmResult<PublicKey>;
     async fn list_keys(&self) -> HsmResult<Vec<KeyInfo>>;
     fn backend_name(&self) -> &'static str;
+    async fn reload_keys(&self, key_configs: &[crate::config::KeyConfig]) -> HsmResult<()>;
 }
 
 // ─── Factory ─────────────────────────────────────────────────────────────────

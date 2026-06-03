@@ -12,7 +12,7 @@ mod hsm;
 mod http;
 
 use crate::{
-    config::GatewayConfig,
+    config::{AuthConfig, GatewayConfig},
     grpc::{
         proto::signing_service_server::SigningServiceServer,
         service::SigningGatewayService,
@@ -25,16 +25,19 @@ use axum::{
     routing::{get, post},
     Router,
 };
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 use tokio::signal;
 use tower_http::{cors::{Any, CorsLayer}, trace::TraceLayer};
 use tracing::{info, warn};
+use toml;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
 // ─── Shared application state ─────────────────────────────────────────────────
 
 pub struct AppState {
     pub config: GatewayConfig,
+    /// Hot-reloadable auth config (updated when keys.toml changes)
+    pub auth: Arc<RwLock<AuthConfig>>,
     pub hsm: Arc<dyn HsmBackend>,
     pub start_time: std::time::Instant,
 }
@@ -87,11 +90,59 @@ async fn main() -> anyhow::Result<()> {
     let hsm_backend = hsm::create_backend(&cfg.hsm, &cfg.keys).await?;
     info!(backend = %hsm_backend.backend_name(), "HSM backend ready");
 
+    let auth = Arc::new(RwLock::new(cfg.auth.clone()));
+
     let state = Arc::new(AppState {
         config: cfg.clone(),
+        auth: Arc::clone(&auth),
         hsm: hsm_backend,
         start_time: std::time::Instant::now(),
     });
+
+    // ── Hot-reload watcher for keys.toml ──────────────────────────────────────
+    {
+        use notify::{Config, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
+        use std::time::Duration;
+
+        let hsm_ref  = Arc::clone(&state.hsm);
+        let auth_ref = Arc::clone(&auth);
+
+        let (tx, mut rx) = tokio::sync::mpsc::channel(4);
+
+        let mut watcher = RecommendedWatcher::new(
+            move |res: notify::Result<notify::Event>| {
+                if let Ok(event) = res {
+                    if matches!(event.kind, EventKind::Modify(_) | EventKind::Create(_)) {
+                        let _ = tx.blocking_send(());
+                    }
+                }
+            },
+            Config::default().with_poll_interval(Duration::from_secs(1)),
+        )?;
+
+        watcher.watch(std::path::Path::new("keys.toml"), RecursiveMode::NonRecursive)?;
+
+        tokio::spawn(async move {
+            // Keep watcher alive in this task
+            let _watcher = watcher;
+            while rx.recv().await.is_some() {
+                // Debounce — ignore rapid duplicate events
+                tokio::time::sleep(Duration::from_millis(200)).await;
+                while rx.try_recv().is_ok() {}
+
+                match load_keys_file() {
+                    Ok((keys, new_auth)) => {
+                        if let Err(e) = hsm_ref.reload_keys(&keys).await {
+                            warn!(error = %e, "Failed to reload keys");
+                        }
+                        *auth_ref.write().unwrap() = new_auth;
+                        info!("keys.toml reloaded");
+                    }
+                    Err(e) => warn!(error = %e, "keys.toml parse error — keeping previous config"),
+                }
+            }
+        });
+    }
 
     // HTTP router
     let http_addr: std::net::SocketAddr = cfg.server.http_addr.parse()?;
@@ -181,6 +232,19 @@ async fn shutdown_signal() {
         _ = terminate => {},
     }
     info!("Shutdown signal received — draining connections");
+}
+
+// ─── Hot-reload helper ────────────────────────────────────────────────────────
+
+fn load_keys_file() -> anyhow::Result<(Vec<config::KeyConfig>, config::AuthConfig)> {
+    #[derive(serde::Deserialize)]
+    struct KeysFile {
+        keys: Vec<config::KeyConfig>,
+        auth: config::AuthConfig,
+    }
+    let text = std::fs::read_to_string("keys.toml")?;
+    let parsed: KeysFile = toml::from_str(&text)?;
+    Ok((parsed.keys, parsed.auth))
 }
 
 // ─── Built-in dev defaults ────────────────────────────────────────────────────
