@@ -36,3 +36,11 @@ allow_all = false    # true only for local dev
 "tok-service-a-xxxxxxxx" = "service-a"
 "tok-service-b-xxxxxxxx" = "service-b"
 "tok-service-c-xxxxxxxx" = "service-c"
+
+# Per-caller key allowlist.
+# List the key IDs each caller is permitted to use.
+# Callers with no entry here may use any key.
+[auth.allowed_keys]
+"service-a" = ["svc-signing-ec", "svc-signing-rsa"]
+"service-b" = ["svc-signing-rsa"]
+"service-c" = ["jwt-hmac"]

@@ -80,20 +80,38 @@ impl SigningService for SigningGatewayService {
     ) -> Result<Response<SignResponse>, Status> {
         // Auth: check bearer token from metadata
         let allow_all = self.state.auth.read().unwrap().allow_all;
-        if !allow_all {
-            let token = request
-                .metadata()
-                .get("authorization")
-                .and_then(|v| v.to_str().ok())
-                .and_then(|v| v.strip_prefix("Bearer "));
-
-            let caller_ok = token.and_then(|t| self.state.auth.read().unwrap().tokens.get(t).cloned()).is_some();
-            if !caller_ok {
-                return Err(Status::unauthenticated("Invalid or missing Bearer token"));
-            }
-        }
+        let token = request
+            .metadata()
+            .get("authorization")
+            .and_then(|v| v.to_str().ok())
+            .and_then(|v| v.strip_prefix("Bearer "))
+            .map(|s| s.to_owned());
 
         let req = request.into_inner();
+
+        if !allow_all {
+            let caller_id_from_token = token
+                .as_deref()
+                .and_then(|t| self.state.auth.read().unwrap().tokens.get(t).cloned());
+
+            let caller_id_from_token = match caller_id_from_token {
+                Some(id) => id,
+                None => return Err(Status::unauthenticated("Invalid or missing Bearer token")),
+            };
+
+            // Enforce per-caller key allowlist
+            if !req.key_id.is_empty() {
+                let auth = self.state.auth.read().unwrap();
+                if let Some(allowed) = auth.allowed_keys.get(&caller_id_from_token) {
+                    if !allowed.iter().any(|k| k == &req.key_id) {
+                        return Err(Status::permission_denied(format!(
+                            "Key '{}' is not permitted for caller '{}'",
+                            req.key_id, caller_id_from_token
+                        )));
+                    }
+                }
+            }
+        }
 
         let algorithm = if req.algorithm == 0 {
             // UNSPECIFIED — look up default from key registry

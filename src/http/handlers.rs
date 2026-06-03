@@ -122,6 +122,19 @@ fn check_caller(state: &AppState, caller_id: &str, token: Option<&str>) -> bool 
     }
 }
 
+/// Returns true if the caller is allowed to use the given key.
+/// Callers with no entry in `allowed_keys` may use any key.
+fn check_key_allowed(state: &AppState, caller_id: &str, key_id: &str) -> bool {
+    let auth = state.auth.read().unwrap();
+    if auth.allow_all {
+        return true;
+    }
+    match auth.allowed_keys.get(caller_id) {
+        Some(keys) => keys.iter().any(|k| k == key_id),
+        None => true,
+    }
+}
+
 fn extract_bearer(headers: &axum::http::HeaderMap) -> Option<&str> {
     headers
         .get("Authorization")
@@ -178,6 +191,18 @@ pub async fn handle_sign(
             Json(ErrorResponse {
                 error: "Unauthorized".into(),
                 code: "UNAUTHORIZED".into(),
+            }),
+        )
+            .into_response();
+    }
+
+    if !req.key_id.is_empty() && !check_key_allowed(&state, &req.caller_id, &req.key_id) {
+        warn!(caller_id = %req.caller_id, key_id = %req.key_id, "Key not allowed for caller");
+        return (
+            StatusCode::FORBIDDEN,
+            Json(ErrorResponse {
+                error: format!("Key '{}' is not permitted for caller '{}'", req.key_id, req.caller_id),
+                code: "KEY_NOT_ALLOWED".into(),
             }),
         )
             .into_response();

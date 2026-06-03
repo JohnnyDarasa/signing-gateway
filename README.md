@@ -211,6 +211,22 @@ grpcurl -plaintext \
 > **Auth:** Replace `tok-service-a-xxxxxxxx` with the actual token from `keys.toml` (`[auth.tokens]`).  
 > Set `allow_all = true` in `keys.toml` to skip auth in local dev.
 
+### Key allowlist per caller
+
+In `keys.toml`, restrict each caller to a specific set of keys:
+
+```toml
+[auth.allowed_keys]
+"service-a" = ["svc-signing-ec", "svc-signing-rsa"]
+"service-b" = ["svc-signing-rsa"]
+"service-c" = ["jwt-hmac"]
+```
+
+- Callers with no entry here may use **any** key.
+- Requests for a key outside the allowlist are rejected with `403 Forbidden` (HTTP) or `PERMISSION_DENIED` (gRPC).
+
+---
+
 > **Note:** `grpcurl` requires `bytes` fields to be base64-encoded in JSON input.  
 > Native gRPC clients (Rust/Go/Python) send raw bytes directly — no encoding needed.
 

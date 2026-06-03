@@ -280,8 +280,9 @@ fn default_config() -> GatewayConfig {
             },
         ],
         auth: AuthConfig {
-            tokens:    HashMap::new(),
-            allow_all: true, // ⚠ dev only
+            tokens:       HashMap::new(),
+            allow_all:    true, // ⚠ dev only
+            allowed_keys: HashMap::new(),
         },
         observability: ObservabilityConfig {
             log_format:   LogFormat::Pretty,

@@ -127,6 +127,10 @@ pub struct AuthConfig {
     pub tokens: HashMap<String, String>,
     /// DEV only — accept any caller_id without a token
     pub allow_all: bool,
+    /// Per-caller key allowlist: caller_id → list of permitted key IDs.
+    /// If a caller has no entry here, all keys are accessible.
+    #[serde(default)]
+    pub allowed_keys: HashMap<String, Vec<String>>,
 }
 
 // ─── Observability ────────────────────────────────────────────────────────────
