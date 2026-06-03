@@ -160,7 +160,7 @@ impl HsmBackend for SoftwareHsm {
         let new_keys = Self::load_keys(&self.cfg, key_configs)
             .map_err(|e| HsmError::Config(e.to_string()))?;
         *self.keys.write().unwrap() = new_keys;
-        info!(count = key_configs.len(), "Keys hot-reloaded from keys.toml");
+        info!(count = key_configs.len(), "Keys hot-reloaded from auth.toml");
         Ok(())
     }
 }

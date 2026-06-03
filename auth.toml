@@ -53,6 +53,6 @@ trusted_proxies = ["127.0.0.1"]
 # Accepts exact IPs or CIDR ranges (IPv4 and IPv6).
 # Callers with no entry here may connect from any IP.
 [auth.allowed_ips]
-"service-a" = ["10.0.1.0/24", "192.168.10.5","127.0.0.1"]
+"service-a" = ["10.0.1.0/24", "192.168.10.5", "127.0.0.1"]
 "service-b" = ["10.0.2.0/24"]
 "service-c" = ["10.0.3.0/24"]

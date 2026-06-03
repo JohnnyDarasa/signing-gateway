@@ -162,7 +162,7 @@ impl GatewayConfig {
     pub fn load() -> anyhow::Result<Self> {
         let cfg = config::Config::builder()
             .add_source(config::File::with_name("config").required(false))
-            .add_source(config::File::with_name("keys").required(false))
+            .add_source(config::File::with_name("auth").required(false))
             .add_source(config::Environment::with_prefix("SGW").separator("__"))
             .build()?;
         Ok(cfg.try_deserialize()?)

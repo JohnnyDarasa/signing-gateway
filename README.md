@@ -99,8 +99,8 @@ curl -X POST http://localhost:8080/v1/sign \
   }'
 ```
 
-> **Auth:** Replace `tok-service-a-xxxxxxxx` with the actual token from `keys.toml` (`[auth.tokens]`).  
-> Set `allow_all = true` in `keys.toml` to skip auth in local dev.
+> **Auth:** Replace `tok-service-a-xxxxxxxx` with the actual token from `auth.toml` (`[auth.tokens]`).  
+> Set `allow_all = true` in `auth.toml` to skip auth in local dev.
 
 Response:
 ```json
@@ -208,12 +208,12 @@ grpcurl -plaintext \
   localhost:50051 signing.v1.SigningService/ListKeys
 ```
 
-> **Auth:** Replace `tok-service-a-xxxxxxxx` with the actual token from `keys.toml` (`[auth.tokens]`).  
-> Set `allow_all = true` in `keys.toml` to skip auth in local dev.
+> **Auth:** Replace `tok-service-a-xxxxxxxx` with the actual token from `auth.toml` (`[auth.tokens]`).  
+> Set `allow_all = true` in `auth.toml` to skip auth in local dev.
 
 ### Key allowlist per caller
 
-In `keys.toml`, restrict each caller to a specific set of keys:
+In `auth.toml`, restrict each caller to a specific set of keys:
 
 ```toml
 [auth.allowed_keys]

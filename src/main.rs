@@ -36,7 +36,7 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilte
 
 pub struct AppState {
     pub config: GatewayConfig,
-    /// Hot-reloadable auth config (updated when keys.toml changes)
+    /// Hot-reloadable auth config (updated when auth.toml changes)
     pub auth: Arc<RwLock<AuthConfig>>,
     pub hsm: Arc<dyn HsmBackend>,
     pub start_time: std::time::Instant,
@@ -138,7 +138,7 @@ async fn main() -> anyhow::Result<()> {
         start_time: std::time::Instant::now(),
     });
 
-    // ── Hot-reload watcher for keys.toml ──────────────────────────────────────
+    // ── Hot-reload watcher for auth.toml ──────────────────────────────────────
     {
         use notify::{Config, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
         use std::time::Duration;
@@ -159,7 +159,7 @@ async fn main() -> anyhow::Result<()> {
             Config::default().with_poll_interval(Duration::from_secs(1)),
         )?;
 
-        watcher.watch(std::path::Path::new("keys.toml"), RecursiveMode::NonRecursive)?;
+        watcher.watch(std::path::Path::new("auth.toml"), RecursiveMode::NonRecursive)?;
 
         tokio::spawn(async move {
             // Keep watcher alive in this task
@@ -175,9 +175,9 @@ async fn main() -> anyhow::Result<()> {
                             warn!(error = %e, "Failed to reload keys");
                         }
                         *auth_ref.write().unwrap() = new_auth;
-                        info!("keys.toml reloaded");
+                        info!("auth.toml reloaded");
                     }
-                    Err(e) => warn!(error = %e, "keys.toml parse error — keeping previous config"),
+                    Err(e) => warn!(error = %e, "auth.toml parse error — keeping previous config"),
                 }
             }
         });
@@ -281,7 +281,7 @@ fn load_keys_file() -> anyhow::Result<(Vec<config::KeyConfig>, config::AuthConfi
         keys: Vec<config::KeyConfig>,
         auth: config::AuthConfig,
     }
-    let text = std::fs::read_to_string("keys.toml")?;
+    let text = std::fs::read_to_string("auth.toml")?;
     let parsed: KeysFile = toml::from_str(&text)?;
     Ok((parsed.keys, parsed.auth))
 }
