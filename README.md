@@ -88,6 +88,7 @@ Pass `"prehashed": true` when sending a pre-computed SHA-256 digest.
 # Sign a raw payload (gateway hashes internally)
 curl -X POST http://localhost:8080/v1/sign \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer tok-service-a-xxxxxxxx" \
   -d '{
     "caller_id":  "service-a",
     "key_id":     "svc-signing-ec",
@@ -96,10 +97,10 @@ curl -X POST http://localhost:8080/v1/sign \
     "prehashed":  true,
     "request_id": "req-001"
   }'
-
-# With bearer token auth (when allow_all = false):
-# -H "Authorization: Bearer tok-service-a-xxxxxxxx" \
 ```
+
+> **Auth:** Replace `tok-service-a-xxxxxxxx` with the actual token from `keys.toml` (`[auth.tokens]`).  
+> Set `allow_all = true` in `keys.toml` to skip auth in local dev.
 
 Response:
 ```json
@@ -175,6 +176,7 @@ grpcurl -plaintext localhost:50051 signing.v1.SigningService/Health
 # Sign (payload = base64 of raw bytes for grpcurl; use hex in HTTP API)
 HASH_B64=$(echo -n '{"sub":"user123"}' | openssl dgst -sha256 | awk '{print $2}' | xxd -r -p | base64)
 grpcurl -plaintext \
+  -H 'Authorization: Bearer tok-service-a-xxxxxxxx' \
   -d '{
     "caller_id": "service-a",
     "key_id":    "svc-signing-ec",
@@ -189,6 +191,7 @@ grpcurl -plaintext \
 SIG_HEX="f553674d..."
 SIG_B64=$(echo -n "$SIG_HEX" | xxd -r -p | base64)
 grpcurl -plaintext \
+  -H 'Authorization: Bearer tok-service-a-xxxxxxxx' \
   -d '{
     "key_id":    "svc-signing-ec",
     "algorithm": "ES256",
@@ -200,9 +203,13 @@ grpcurl -plaintext \
 
 # List keys
 grpcurl -plaintext \
+  -H 'Authorization: Bearer tok-service-a-xxxxxxxx' \
   -d '{"caller_id": "service-a"}' \
   localhost:50051 signing.v1.SigningService/ListKeys
 ```
+
+> **Auth:** Replace `tok-service-a-xxxxxxxx` with the actual token from `keys.toml` (`[auth.tokens]`).  
+> Set `allow_all = true` in `keys.toml` to skip auth in local dev.
 
 > **Note:** `grpcurl` requires `bytes` fields to be base64-encoded in JSON input.  
 > Native gRPC clients (Rust/Go/Python) send raw bytes directly — no encoding needed.
