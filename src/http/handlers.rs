@@ -14,14 +14,15 @@ use crate::{
     AppState,
 };
 use axum::{
-    extract::{Path, State},
+    extract::{ConnectInfo, Path, State},
     http::StatusCode,
     response::{IntoResponse, Json, Response},
 };
 use base64::Engine;
 use chrono::Utc;
+use ipnet::IpNet;
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
+use std::{net::SocketAddr, sync::Arc};
 use tracing::{error, info, instrument, warn};
 use uuid::Uuid;
 
@@ -135,6 +136,33 @@ fn check_key_allowed(state: &AppState, caller_id: &str, key_id: &str) -> bool {
     }
 }
 
+/// Returns true if the source IP is permitted for this caller.
+/// Entries may be exact IPs ("10.0.1.5") or CIDR ranges ("10.0.0.0/8").
+/// Callers with no entry in `allowed_ips` may connect from any IP.
+fn check_ip_allowed(state: &AppState, caller_id: &str, peer: &SocketAddr) -> bool {
+    let auth = state.auth.read().unwrap();
+    if auth.allow_all {
+        return true;
+    }
+    let Some(patterns) = auth.allowed_ips.get(caller_id) else {
+        return true; // no restriction configured
+    };
+    let ip = peer.ip();
+    for pattern in patterns {
+        // Try CIDR first, then exact IP parse
+        if let Ok(net) = pattern.parse::<IpNet>() {
+            if net.contains(&ip) {
+                return true;
+            }
+        } else if let Ok(exact) = pattern.parse::<std::net::IpAddr>() {
+            if exact == ip {
+                return true;
+            }
+        }
+    }
+    false
+}
+
 fn extract_bearer(headers: &axum::http::HeaderMap) -> Option<&str> {
     headers
         .get("Authorization")
@@ -180,6 +208,7 @@ fn parse_algorithm(s: &str) -> Result<Algorithm, String> {
 #[instrument(skip(state, headers, req), fields(caller_id = %req.caller_id, key_id = %req.key_id))]
 pub async fn handle_sign(
     State(state): State<Arc<AppState>>,
+    ConnectInfo(peer): ConnectInfo<SocketAddr>,
     headers: axum::http::HeaderMap,
     Json(req): Json<SignHttpRequest>,
 ) -> Response {
@@ -191,6 +220,18 @@ pub async fn handle_sign(
             Json(ErrorResponse {
                 error: "Unauthorized".into(),
                 code: "UNAUTHORIZED".into(),
+            }),
+        )
+            .into_response();
+    }
+
+    if !check_ip_allowed(&state, &req.caller_id, &peer) {
+        warn!(caller_id = %req.caller_id, ip = %peer.ip(), "IP not allowed for caller");
+        return (
+            StatusCode::FORBIDDEN,
+            Json(ErrorResponse {
+                error: format!("Source IP '{}' is not permitted for caller '{}'", peer.ip(), req.caller_id),
+                code: "IP_NOT_ALLOWED".into(),
             }),
         )
             .into_response();

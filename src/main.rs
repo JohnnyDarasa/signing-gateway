@@ -156,7 +156,7 @@ async fn main() -> anyhow::Result<()> {
     let http_task = tokio::spawn(async move {
         info!(addr = %http_addr, "HTTP server listening");
         let listener = tokio::net::TcpListener::bind(http_addr).await.unwrap();
-        axum::serve(listener, http_router)
+        axum::serve(listener, http_router.into_make_service_with_connect_info::<std::net::SocketAddr>())
             .with_graceful_shutdown(shutdown_signal())
             .await
             .unwrap();
@@ -283,6 +283,7 @@ fn default_config() -> GatewayConfig {
             tokens:       HashMap::new(),
             allow_all:    true, // ⚠ dev only
             allowed_keys: HashMap::new(),
+            allowed_ips:  HashMap::new(),
         },
         observability: ObservabilityConfig {
             log_format:   LogFormat::Pretty,

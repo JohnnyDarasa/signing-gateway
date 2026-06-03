@@ -60,6 +60,7 @@ bytes = "1"
 http = "1"
 deadpool = "0.12"        # session pool cho HSM
 notify = { version = "6", features = ["macos_kqueue"] }  # file watcher cho hot-reload
+ipnet = { version = "2", features = ["serde"] }          # CIDR matching for IP allowlists
 
 [features]
 default = ["software-hsm"]

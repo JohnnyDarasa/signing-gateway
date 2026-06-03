@@ -3,9 +3,10 @@
 
 use crate::{config::Algorithm, hsm::HsmError, AppState};
 use chrono::Utc;
+use ipnet::IpNet;
 use std::sync::Arc;
 use tonic::{Request, Response, Status};
-use tracing::{error, info};
+use tracing::{error, info, warn};
 use uuid::Uuid;
 
 use super::proto::{
@@ -80,6 +81,7 @@ impl SigningService for SigningGatewayService {
     ) -> Result<Response<SignResponse>, Status> {
         // Auth: check bearer token from metadata
         let allow_all = self.state.auth.read().unwrap().allow_all;
+        let peer = request.remote_addr();
         let token = request
             .metadata()
             .get("authorization")
@@ -98,6 +100,30 @@ impl SigningService for SigningGatewayService {
                 Some(id) => id,
                 None => return Err(Status::unauthenticated("Invalid or missing Bearer token")),
             };
+
+            // Enforce per-caller IP allowlist
+            if let Some(peer_addr) = peer {
+                let auth = self.state.auth.read().unwrap();
+                if let Some(patterns) = auth.allowed_ips.get(&caller_id_from_token) {
+                    let ip = peer_addr.ip();
+                    let allowed = patterns.iter().any(|p| {
+                        if let Ok(net) = p.parse::<IpNet>() {
+                            net.contains(&ip)
+                        } else if let Ok(exact) = p.parse::<std::net::IpAddr>() {
+                            exact == ip
+                        } else {
+                            false
+                        }
+                    });
+                    if !allowed {
+                        warn!(caller_id = %caller_id_from_token, ip = %ip, "IP not allowed for caller");
+                        return Err(Status::permission_denied(format!(
+                            "Source IP '{}' is not permitted for caller '{}'",
+                            ip, caller_id_from_token
+                        )));
+                    }
+                }
+            }
 
             // Enforce per-caller key allowlist
             if !req.key_id.is_empty() {

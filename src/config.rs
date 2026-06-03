@@ -131,6 +131,11 @@ pub struct AuthConfig {
     /// If a caller has no entry here, all keys are accessible.
     #[serde(default)]
     pub allowed_keys: HashMap<String, Vec<String>>,
+    /// Per-caller IP allowlist: caller_id → list of CIDRs or exact IPs.
+    /// Supports IPv4 (e.g. "10.0.1.5", "192.168.0.0/24") and IPv6.
+    /// If a caller has no entry here, any source IP is accepted.
+    #[serde(default)]
+    pub allowed_ips: HashMap<String, Vec<String>>,
 }
 
 // ─── Observability ────────────────────────────────────────────────────────────

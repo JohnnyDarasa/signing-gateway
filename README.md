@@ -225,6 +225,22 @@ In `keys.toml`, restrict each caller to a specific set of keys:
 - Callers with no entry here may use **any** key.
 - Requests for a key outside the allowlist are rejected with `403 Forbidden` (HTTP) or `PERMISSION_DENIED` (gRPC).
 
+### IP allowlist per caller
+
+Restrict each caller to specific source IPs or CIDR ranges:
+
+```toml
+[auth.allowed_ips]
+"service-a" = ["10.0.1.0/24", "192.168.10.5"]
+"service-b" = ["10.0.2.0/24"]
+"service-c" = ["10.0.3.0/24"]
+```
+
+- Accepts exact IPs (`"192.168.10.5"`) or CIDR ranges (`"10.0.1.0/24"`). IPv4 and IPv6 are both supported.
+- Callers with no entry here may connect from **any** IP.
+- Requests from a disallowed IP are rejected with `403 Forbidden` (HTTP) or `PERMISSION_DENIED` (gRPC), **after** the bearer token is validated.
+- The IP check uses the direct TCP peer address. If the gateway sits behind a reverse proxy, configure the proxy to forward the real client IP and adjust accordingly.
+
 ---
 
 > **Note:** `grpcurl` requires `bytes` fields to be base64-encoded in JSON input.  
