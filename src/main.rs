@@ -98,13 +98,13 @@ async fn main() -> anyhow::Result<()> {
         config::LogFormat::Json => {
             tracing_subscriber::registry()
                 .with(filter)
-                .with(tracing_subscriber::fmt::layer().json())
+                .with(tracing_subscriber::fmt::layer().json().with_file(true).with_line_number(true).with_target(false))
                 .init();
         }
         config::LogFormat::Pretty => {
             tracing_subscriber::registry()
                 .with(filter)
-                .with(tracing_subscriber::fmt::layer().pretty())
+                .with(tracing_subscriber::fmt::layer().pretty().with_file(true).with_line_number(true).with_target(false))
                 .init();
         }
     }
