@@ -1,0 +1,103 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Signing Gateway — config.toml
+# All values can be overridden with env vars using prefix SGW__
+# Example: SGW__SERVER__HTTP_ADDR=0.0.0.0:9080
+# ─────────────────────────────────────────────────────────────────────────────
+
+[server]
+http_addr             = "0.0.0.0:8080"
+grpc_addr             = "0.0.0.0:50051"
+shutdown_timeout_secs = 30
+
+# TLS for gRPC (recommended in production)
+# [server.tls]
+# cert_pem_path = "/etc/certs/tls.crt"
+# key_pem_path  = "/etc/certs/tls.key"
+# ca_pem_path   = "/etc/certs/ca.crt"    ← for mTLS client verification
+
+
+# ─── HSM Backend ─────────────────────────────────────────────────────────────
+# Choose ONE block: software (dev) or hsm_cluster (production).
+
+# ── Option A: Software HSM — DEV / TEST only ─────────────────────────────────
+[hsm]
+backend = "software"
+key_dir = "/tmp/signing-gateway-keys"   # chmod 700, owned by service user
+
+# ── Option B: PKCS#11 HSM Cluster — PRODUCTION ───────────────────────────────
+# Supports: Thales Luna SA/Network HSM, Entrust nShield Connect,
+#           AWS CloudHSM (PKCS#11 client), SoftHSM2 (CI)
+#
+# [hsm]
+# backend      = "hsm_cluster"
+#
+# # Path to the vendor-supplied PKCS#11 shared library:
+# library_path = "/usr/lib/libCryptoki2_64.so"          # Thales Luna SA
+# # library_path = "/opt/nfast/toolkits/pkcs11/libcknfast.so"  # Entrust nShield
+# # library_path = "/opt/cloudhsm/lib/libcloudhsm_pkcs11.so"   # AWS CloudHSM
+# # library_path = "/usr/lib/softhsm/libsofthsm2.so"           # SoftHSM2
+#
+# # HA virtual slot: Luna HA presents a single slot that load-balances across
+# # all HSM nodes in the cluster. Use that slot ID here.
+# slot_id      = 0
+#
+# # PIN — in production load from AWS Secrets Manager / Vault:
+# #   pin = "${SECRET_MANAGER:signing-gateway/hsm-pin}"
+# pin          = "changeme"
+#
+# # Session pool — how many concurrent PKCS#11 sessions to keep open.
+# # Thales Luna allows up to 256 sessions per partition.
+# pool_size    = 16
+#
+# # Retry on transient HSM errors (e.g. momentary cluster failover)
+# retry_attempts  = 3
+# retry_delay_ms  = 200
+#
+# login_mode   = "user"    # "user" for signing | "so" for key management
+
+
+# ─── Keys ────────────────────────────────────────────────────────────────────
+# backend_ref:
+#   software    → filename stem under key_dir  (e.g. "svc-ec" → svc-ec.pem)
+#   hsm_cluster → CKA_LABEL of the key on the HSM token
+
+[[keys]]
+id          = "svc-signing-ec"
+description = "Primary EC P-256 service signing key"
+backend_ref = "svc-signing-ec"
+algorithm   = "ES256"
+enabled     = true
+
+[[keys]]
+id          = "svc-signing-rsa"
+description = "RSA-2048 signing key (legacy consumers)"
+backend_ref = "svc-signing-rsa"
+algorithm   = "RS256"
+enabled     = true
+
+[[keys]]
+id          = "jwt-hmac"
+description = "HMAC-SHA256 for internal JWT tokens"
+backend_ref = "jwt-hmac"
+algorithm   = "HS256"
+enabled     = true
+
+
+# ─── Auth ────────────────────────────────────────────────────────────────────
+# Static bearer tokens → caller_id.
+# Production recommendation: use mTLS (each service has a client cert) or
+# IRSA (IAM Roles for Service Accounts on EKS) instead.
+[auth]
+allow_all = true    # true only for local dev
+
+[auth.tokens]
+"tok-service-a-xxxxxxxx" = "service-a"
+"tok-service-b-xxxxxxxx" = "service-b"
+"tok-service-c-xxxxxxxx" = "service-c"
+
+
+# ─── Observability ───────────────────────────────────────────────────────────
+[observability]
+log_format   = "json"         # "pretty" | "json"
+log_level    = "info"         # RUST_LOG syntax: "debug,hyper=warn"
+metrics_addr = "0.0.0.0:9090" # Prometheus scrape endpoint

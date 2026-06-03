@@ -1,0 +1,131 @@
+syntax = "proto3";
+
+package signing.v1;
+
+// ─────────────────────────────────────────────
+//  Signing Gateway gRPC Service
+// ─────────────────────────────────────────────
+
+service SigningService {
+  // Sign a payload — returns raw signature bytes
+  rpc Sign(SignRequest) returns (SignResponse);
+
+  // Verify a signature (convenience, uses public key only)
+  rpc Verify(VerifyRequest) returns (VerifyResponse);
+
+  // List available signing keys
+  rpc ListKeys(ListKeysRequest) returns (ListKeysResponse);
+
+  // Get the public key for a given key ID
+  rpc GetPublicKey(GetPublicKeyRequest) returns (GetPublicKeyResponse);
+
+  // Health check
+  rpc Health(HealthRequest) returns (HealthResponse);
+}
+
+// ─── Enums ────────────────────────────────────
+
+enum Algorithm {
+  ALGORITHM_UNSPECIFIED = 0;
+  RS256 = 1;   // RSASSA-PKCS1-v1_5 + SHA-256
+  RS384 = 2;
+  RS512 = 3;
+  PS256 = 4;   // RSASSA-PSS + SHA-256
+  PS384 = 5;
+  PS512 = 6;
+  ES256 = 7;   // ECDSA P-256 + SHA-256
+  ES384 = 8;   // ECDSA P-384 + SHA-384
+  HS256 = 9;   // HMAC-SHA-256
+  HS384 = 10;
+  HS512 = 11;
+}
+
+enum KeyStatus {
+  KEY_STATUS_UNSPECIFIED = 0;
+  ENABLED = 1;
+  DISABLED = 2;
+  PENDING_DELETION = 3;
+}
+
+// ─── Sign ─────────────────────────────────────
+
+message SignRequest {
+  string caller_id  = 1 [json_name = "caller_id"];
+  string key_id     = 2 [json_name = "key_id"];
+  Algorithm algorithm = 3;
+  bytes payload     = 4;
+  bool prehashed    = 5;
+  string request_id = 6 [json_name = "request_id"];
+}
+
+message SignResponse {
+  string signature_hex = 1 [json_name = "signature_hex"];
+  string key_id        = 2 [json_name = "key_id"];
+  Algorithm algorithm  = 3;
+  string signed_at     = 4 [json_name = "signed_at"];
+  string request_id    = 5 [json_name = "request_id"];
+}
+
+// ─── Verify ───────────────────────────────────
+
+message VerifyRequest {
+  string key_id       = 1 [json_name = "key_id"];
+  Algorithm algorithm = 2;
+  bytes payload       = 3;
+  bytes signature     = 4;
+  bool prehashed      = 5;
+}
+
+message VerifyResponse {
+  bool valid      = 1;
+  string key_id   = 2 [json_name = "key_id"];
+  string message  = 3;
+}
+
+// ─── ListKeys ────────────────────────────────
+
+message ListKeysRequest {
+  string caller_id = 1 [json_name = "caller_id"];
+}
+
+message ListKeysResponse {
+  repeated KeyInfo keys = 1;
+}
+
+message KeyInfo {
+  string key_id             = 1 [json_name = "key_id"];
+  string description        = 2;
+  Algorithm default_algorithm = 3 [json_name = "default_algorithm"];
+  KeyStatus status          = 4;
+  string created_at         = 5 [json_name = "created_at"];
+  string key_type           = 6 [json_name = "key_type"];
+}
+
+// ─── GetPublicKey ────────────────────────────
+
+message GetPublicKeyRequest {
+  string key_id = 1 [json_name = "key_id"];
+}
+
+message GetPublicKeyResponse {
+  string key_id          = 1 [json_name = "key_id"];
+  string public_key_pem  = 2 [json_name = "public_key_pem"];
+  Algorithm algorithm    = 3;
+  string key_type        = 4 [json_name = "key_type"];
+}
+
+// ─── Health ──────────────────────────────────
+
+message HealthRequest {}
+
+message HealthResponse {
+  enum Status {
+    UNKNOWN = 0;
+    SERVING = 1;
+    NOT_SERVING = 2;
+  }
+  Status status          = 1;
+  string hsm_backend     = 2 [json_name = "hsm_backend"];
+  string version         = 3;
+  string uptime_seconds  = 4 [json_name = "uptime_seconds"];
+}

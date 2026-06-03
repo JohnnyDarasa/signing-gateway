@@ -1,0 +1,11 @@
+# Build output
+/target/
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# Secrets / local config overrides
+*.local.toml
+.env
