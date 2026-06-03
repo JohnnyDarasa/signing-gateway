@@ -10,7 +10,7 @@
 
 use crate::{
     config::Algorithm,
-    hsm::{HsmBackend, HsmError},
+    hsm::HsmError,
     AppState,
 };
 use axum::{

@@ -27,12 +27,18 @@
 //!
 //! Compile with: cargo build --features hsm-cluster
 
-use super::{compute_digest, HsmBackend, HsmError, HsmResult, KeyInfo, PublicKey, Signature};
+use super::{HsmBackend, HsmError, HsmResult, KeyInfo, PublicKey, Signature};
 use crate::config::{Algorithm, HsmClusterConfig, KeyConfig};
 use async_trait::async_trait;
 use std::collections::HashMap;
+use tracing::warn;
+
+#[cfg(feature = "hsm-cluster")]
+use super::compute_digest;
+#[cfg(feature = "hsm-cluster")]
 use std::sync::Arc;
-use tracing::{debug, error, info, warn};
+#[cfg(feature = "hsm-cluster")]
+use tracing::{debug, error, info};
 
 // ─── Key registry ─────────────────────────────────────────────────────────────
 
@@ -40,6 +46,7 @@ use tracing::{debug, error, info, warn};
 struct KeyEntry {
     info: KeyInfo,
     /// CKA_LABEL on the HSM token
+    #[allow(dead_code)]
     label: String,
 }
 
@@ -212,6 +219,7 @@ mod p11 {
 
 pub struct HsmClusterBackend {
     keys: HashMap<String, KeyEntry>,
+    #[cfg(feature = "hsm-cluster")]
     cfg: HsmClusterConfig,
 
     #[cfg(feature = "hsm-cluster")]
@@ -222,7 +230,7 @@ pub struct HsmClusterBackend {
 }
 
 impl HsmClusterBackend {
-    pub fn new(cfg: &HsmClusterConfig, key_configs: &[KeyConfig]) -> anyhow::Result<Self> {
+    pub fn new(#[allow(unused_variables)] cfg: &HsmClusterConfig, key_configs: &[KeyConfig]) -> anyhow::Result<Self> {
         let mut keys = HashMap::new();
         for kc in key_configs {
             if !kc.enabled {
@@ -331,6 +339,7 @@ impl HsmClusterBackend {
 // ─── HsmBackend impl ──────────────────────────────────────────────────────────
 
 #[async_trait]
+#[allow(unused_variables)]
 impl HsmBackend for HsmClusterBackend {
     fn backend_name(&self) -> &'static str { "hsm-cluster" }
 

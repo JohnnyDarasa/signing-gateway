@@ -153,18 +153,11 @@ impl HsmBackend for SoftwareHsm {
 fn sign_rsa(
     pem: &[u8],
     algorithm: Algorithm,
-    digest_bytes: &[u8],
+    _digest_bytes: &[u8],
     _prehashed: bool,
     original_payload: &[u8],
 ) -> HsmResult<Vec<u8>> {
-    use rsa::pkcs8::DecodePrivateKey;
-    use rsa::signature::SignatureEncoding;
-    use rsa::signature::Signer;
-
     let pem_str = std::str::from_utf8(pem)
-        .map_err(|e| HsmError::SigningFailed(e.to_string()))?;
-
-    let private_key = rsa::RsaPrivateKey::from_pkcs8_pem(pem_str)
         .map_err(|e| HsmError::SigningFailed(e.to_string()))?;
 
     // We re-sign from original payload using ring for full PSS/PKCS1 support
@@ -194,7 +187,7 @@ fn sign_rsa(
     Ok(sig)
 }
 
-fn sign_ecdsa(pem: &[u8], algorithm: Algorithm, payload: &[u8], prehashed: bool) -> HsmResult<Vec<u8>> {
+fn sign_ecdsa(pem: &[u8], algorithm: Algorithm, payload: &[u8], _prehashed: bool) -> HsmResult<Vec<u8>> {
     use ring::rand::SystemRandom;
     use ring::signature::{self, EcdsaKeyPair};
 
@@ -204,7 +197,7 @@ fn sign_ecdsa(pem: &[u8], algorithm: Algorithm, payload: &[u8], prehashed: bool)
     let der = ecdsa_pem_to_pkcs8_der(pem_str)?;
     let rng = SystemRandom::new();
 
-    let (alg, key_pair) = match algorithm {
+    let (_alg, key_pair) = match algorithm {
         Algorithm::Es256 => {
             let kp = EcdsaKeyPair::from_pkcs8(&signature::ECDSA_P256_SHA256_FIXED_SIGNING, &der, &rng)
                 .map_err(|e| HsmError::SigningFailed(format!("EC P256: {:?}", e)))?;
@@ -346,7 +339,8 @@ fn ecdsa_pem_to_pkcs8_der(pem: &str) -> HsmResult<Vec<u8>> {
         .filter(|l| !l.starts_with("-----"))
         .collect();
     let b64: String = lines.join("");
-    base64::decode(&b64)
+    base64::engine::general_purpose::STANDARD
+        .decode(&b64)
         .map_err(|e| HsmError::SigningFailed(format!("ECDSA DER decode: {}", e)))
 }
 
