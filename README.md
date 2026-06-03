@@ -243,10 +243,11 @@ Restrict each caller to specific source IPs or CIDR ranges:
 
 ### Trusted proxies (ALB / nginx)
 
-When the gateway runs behind a load balancer, all requests appear to come from the LB's IP. Configure `trusted_proxies` in `config.toml` so the gateway reads the real client IP from `X-Forwarded-For` instead:
+When the gateway runs behind a load balancer, all requests appear to come from the LB's IP. Configure `trusted_proxies` in `auth.toml` so the gateway reads the real client IP from `X-Forwarded-For` instead:
 
 ```toml
-# config.toml
+# auth.toml
+[auth]
 trusted_proxies = ["10.0.0.0/16"]   # your ALB / nginx subnet
 ```
 
