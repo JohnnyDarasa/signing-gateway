@@ -128,4 +128,5 @@ message HealthResponse {
   string hsm_backend     = 2 [json_name = "hsm_backend"];
   string version         = 3;
   string uptime_seconds  = 4 [json_name = "uptime_seconds"];
+  uint32 keys_loaded     = 5 [json_name = "keys_loaded"];
 }

@@ -211,11 +211,13 @@ impl SigningService for SigningGatewayService {
         &self,
         _request: Request<HealthRequest>,
     ) -> Result<Response<HealthResponse>, Status> {
+        let keys_loaded = self.state.hsm.list_keys().await.map(|k| k.len()).unwrap_or(0) as u32;
         Ok(Response::new(HealthResponse {
             status:         1, // SERVING
             hsm_backend:    self.state.hsm.backend_name().to_string(),
             version:        env!("CARGO_PKG_VERSION").to_string(),
             uptime_seconds: self.start_time.elapsed().as_secs().to_string(),
+            keys_loaded,
         }))
     }
 }

@@ -184,6 +184,20 @@ grpcurl -plaintext \
   }' \
   localhost:50051 signing.v1.SigningService/Sign
 
+# Verify (convert signature_hex → base64 for grpcurl)
+# Replace the value below with signature_hex from the Sign response above
+SIG_HEX="f553674d..."
+SIG_B64=$(echo -n "$SIG_HEX" | xxd -r -p | base64)
+grpcurl -plaintext \
+  -d '{
+    "key_id":    "svc-signing-ec",
+    "algorithm": "ES256",
+    "payload":   "'"$HASH_B64"'",
+    "signature": "'"$SIG_B64"'",
+    "prehashed": true
+  }' \
+  localhost:50051 signing.v1.SigningService/Verify
+
 # List keys
 grpcurl -plaintext \
   -d '{"caller_id": "service-a"}' \

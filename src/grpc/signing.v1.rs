@@ -113,6 +113,8 @@ pub struct HealthResponse {
     pub version: ::prost::alloc::string::String,
     #[prost(string, tag = "4")]
     pub uptime_seconds: ::prost::alloc::string::String,
+    #[prost(uint32, tag = "5")]
+    pub keys_loaded: u32,
 }
 /// Nested message and enum types in `HealthResponse`.
 pub mod health_response {

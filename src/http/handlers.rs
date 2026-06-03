@@ -76,6 +76,8 @@ pub struct HealthResponse {
     pub status: String,
     pub hsm_backend: String,
     pub version: String,
+    pub uptime_seconds: String,
+    pub keys_loaded: usize,
 }
 
 #[derive(Debug, Serialize)]
@@ -347,9 +349,12 @@ pub async fn handle_get_public_key(
 
 /// GET /health
 pub async fn handle_health(State(state): State<Arc<AppState>>) -> Json<HealthResponse> {
+    let keys_loaded = state.hsm.list_keys().await.map(|k| k.len()).unwrap_or(0);
     Json(HealthResponse {
-        status: "serving".into(),
+        status: "SERVING".into(),
         hsm_backend: state.hsm.backend_name().to_string(),
         version: env!("CARGO_PKG_VERSION").to_string(),
+        uptime_seconds: state.start_time.elapsed().as_secs().to_string(),
+        keys_loaded,
     })
 }
