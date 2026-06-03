@@ -9,3 +9,4 @@
 # Secrets / local config overrides
 *.local.toml
 .env
+/logs/
