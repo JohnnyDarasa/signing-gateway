@@ -81,15 +81,20 @@ Ports:
 
 ### POST /v1/sign
 
+The `payload` field accepts **hex** (recommended), base64, or base64url.  
+Pass `"prehashed": true` when sending a pre-computed SHA-256 digest.
+
 ```bash
+# Sign a raw payload (gateway hashes internally)
 curl -X POST http://localhost:8080/v1/sign \
   -H "Content-Type: application/json" \
   -d '{
-    "caller_id":   "service-a",
-    "key_id":      "svc-signing-ec",
-    "algorithm":   "ES256",
-    "payload_b64": "'$(echo -n '{"sub":"user123"}' | base64)'",
-    "request_id":  "req-001"
+    "caller_id":  "service-a",
+    "key_id":     "svc-signing-ec",
+    "algorithm":  "ES256",
+    "payload":    "'"$(echo -n '{"sub":"user123"}' | openssl dgst -sha256 | awk '{print $2}')"'",
+    "prehashed":  true,
+    "request_id": "req-001"
   }'
 
 # With bearer token auth (when allow_all = false):
@@ -100,7 +105,6 @@ Response:
 ```json
 {
   "signature_hex": "3045...",
-  "signature_b64": "MEUC...",
   "key_id":        "svc-signing-ec",
   "algorithm":     "ES256",
   "signed_at":     "2025-01-01T00:00:00Z",
@@ -114,10 +118,11 @@ Response:
 curl -X POST http://localhost:8080/v1/verify \
   -H "Content-Type: application/json" \
   -d '{
-    "key_id":        "svc-signing-ec",
-    "algorithm":     "ES256",
-    "payload_b64":   "...",
-    "signature_b64": "..."
+    "key_id":    "svc-signing-ec",
+    "algorithm": "ES256",
+    "payload":   "<hex-sha256-of-original-data>",
+    "signature": "<signature_hex from sign response>",
+    "prehashed": true
   }'
 ```
 
@@ -160,17 +165,33 @@ service SigningService {
 }
 ```
 
-To enable the Tonic gRPC server:
-1. Run `cargo build` to trigger `build.rs` → proto codegen (generates code in `src/grpc/`)
-2. In `src/grpc/service.rs`, replace the manual stub structs with `tonic::include_proto!("signing.v1")`
-3. Implement the generated `signing_service_server::SigningService` trait on `SigningGatewayService`, wiring the existing `*_impl` methods
-4. In `src/main.rs`, replace the TCP stub loop with the full Tonic server:
-   ```rust
-   tonic::transport::Server::builder()
-       .add_service(SigningServiceServer::new(grpc_service))
-       .serve_with_shutdown(grpc_addr, shutdown_signal())
-       .await?;
-   ```
+The gRPC server starts automatically on port `50051` alongside the HTTP server.  
+Server reflection is enabled — test with `grpcurl` out of the box:
+
+```bash
+# Health check
+grpcurl -plaintext localhost:50051 signing.v1.SigningService/Health
+
+# Sign (payload = base64 of raw bytes for grpcurl; use hex in HTTP API)
+HASH_B64=$(echo -n '{"sub":"user123"}' | openssl dgst -sha256 | awk '{print $2}' | xxd -r -p | base64)
+grpcurl -plaintext \
+  -d '{
+    "caller_id": "service-a",
+    "key_id":    "svc-signing-ec",
+    "algorithm": "ES256",
+    "payload":   "'"$HASH_B64"'",
+    "prehashed": true
+  }' \
+  localhost:50051 signing.v1.SigningService/Sign
+
+# List keys
+grpcurl -plaintext \
+  -d '{"caller_id": "service-a"}' \
+  localhost:50051 signing.v1.SigningService/ListKeys
+```
+
+> **Note:** `grpcurl` requires `bytes` fields to be base64-encoded in JSON input.  
+> Native gRPC clients (Rust/Go/Python) send raw bytes directly — no encoding needed.
 
 ---
 
